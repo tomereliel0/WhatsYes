@@ -6,7 +6,7 @@ and presents them in a grandma-friendly interface.
 
 import os
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Header, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 import requests
@@ -17,6 +17,16 @@ import time
 from channels import CHANNELS
 
 app = FastAPI(title="WhatsYes - לוח שידורים")
+
+# ── Sync Configuration ────────────────────────────────────────────────────────
+# Data is pushed from a local machine (in Israel) via POST /api/_sync.
+# The SYNC_API_KEY env var protects this endpoint.
+
+SYNC_API_KEY = os.environ.get("SYNC_API_KEY", "")
+
+# Synced schedule store: {(channel_id, date_str): {"ts": epoch, "items": [...]}}
+_synced: dict[tuple[str, str], dict] = {}
+SYNC_TTL = 60 * 60  # Consider synced data stale after 60 min
 
 # ── Yes API Configuration ────────────────────────────────────────────────────
 
@@ -101,13 +111,28 @@ def _format_time(iso_str: str) -> str:
     return israel_dt.strftime("%H:%M")
 
 
+def _get_synced(channel_id: str, date_str: str) -> list[dict] | None:
+    """Return synced items if still fresh, else None."""
+    key = (channel_id, date_str)
+    entry = _synced.get(key)
+    if entry and (time.time() - entry["ts"]) < SYNC_TTL:
+        return entry["items"]
+    return None
+
+
 def _fetch_schedule(channel_id: str, date_str: str) -> list[dict]:
-    """Fetch schedule from Yes API for a single channel and date (with cache)."""
-    # Check cache first
+    """Get schedule: synced data → cache → live API (fallback)."""
+    # 1. Synced data (pushed from local machine)
+    synced = _get_synced(channel_id, date_str)
+    if synced is not None:
+        return synced
+
+    # 2. In-memory cache
     cached = _cache_get(channel_id, date_str)
     if cached is not None:
         return cached
 
+    # 3. Direct API call (works from Israeli IPs only)
     url = f"{YES_API_BASE}/{channel_id}"
     params = {"date": date_str, "ignorePastItems": "false"}
     try:
@@ -134,6 +159,46 @@ def _enrich_item(item: dict) -> dict:
         "start_time": _format_time(item["starts"]) if item.get("starts") else "",
         "end_time": _format_time(item["ends"]) if item.get("ends") else "",
         "channel_id": item.get("channelId", ""),
+    }
+
+
+# ── Sync Endpoint ────────────────────────────────────────────────────────────
+
+@app.post("/api/_sync")
+async def receive_sync(request: Request, x_sync_key: Optional[str] = Header(None)):
+    """Receive bulk schedule data from local sync script."""
+    if not SYNC_API_KEY:
+        return JSONResponse({"error": "SYNC_API_KEY not configured"}, status_code=503)
+    if x_sync_key != SYNC_API_KEY:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    body = await request.json()
+    # Expected: {"schedules": {"CH11|2026-3-3": [{item}, ...], ...}}
+    schedules = body.get("schedules", {})
+    count = 0
+    now = time.time()
+    for key_str, items in schedules.items():
+        parts = key_str.split("|", 1)
+        if len(parts) == 2:
+            _synced[(parts[0], parts[1])] = {"ts": now, "items": items}
+            count += 1
+
+    print(f"[sync] Received {count} channel-date entries")
+    return {"status": "ok", "entries": count}
+
+
+@app.get("/api/_sync/status")
+def sync_status():
+    """Check how fresh the synced data is."""
+    if not _synced:
+        return {"synced": False, "entries": 0}
+    oldest = min(e["ts"] for e in _synced.values())
+    newest = max(e["ts"] for e in _synced.values())
+    return {
+        "synced": True,
+        "entries": len(_synced),
+        "oldest_age_min": round((time.time() - oldest) / 60, 1),
+        "newest_age_min": round((time.time() - newest) / 60, 1),
     }
 
 

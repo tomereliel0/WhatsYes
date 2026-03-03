@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.whatsyes.sync</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/python3</string>
+        <string>/Users/tomereliel/Documents/Projects/WhatsYes/sync.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/tomereliel/Documents/Projects/WhatsYes</string>
+
+    <!-- Run every 30 minutes -->
+    <key>StartInterval</key>
+    <integer>1800</integer>
+
+    <!-- Also run at load (immediately on login) -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Log output -->
+    <key>StandardOutPath</key>
+    <string>/tmp/whatsyes-sync.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/whatsyes-sync.log</string>
+</dict>
+</plist>
