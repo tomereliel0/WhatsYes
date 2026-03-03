@@ -26,7 +26,7 @@ SYNC_API_KEY = os.environ.get("SYNC_API_KEY", "")
 
 # Synced schedule store: {(channel_id, date_str): {"ts": epoch, "items": [...]}}
 _synced: dict[tuple[str, str], dict] = {}
-SYNC_TTL = 60 * 60  # Consider synced data stale after 60 min
+SYNC_TTL = 25 * 60 * 60  # Consider synced data stale after 25 hours
 
 # ── Yes API Configuration ────────────────────────────────────────────────────
 
