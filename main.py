@@ -229,13 +229,22 @@ def sync_status():
 
 # ── API Routes ───────────────────────────────────────────────────────────────
 
+def _channel_number(cid: str) -> int:
+    """Extract the remote/channel number from a channel ID like 'CH11' → 11."""
+    import re
+    m = re.search(r'\d+', cid)
+    return int(m.group()) if m else 0
+
+
 @app.get("/api/channels")
 def get_channels():
-    """Return the list of known channels."""
-    return [
-        {"id": cid, "name": name}
+    """Return the list of known channels, sorted by channel number."""
+    result = [
+        {"id": cid, "name": name, "number": _channel_number(cid)}
         for cid, name in CHANNELS.items()
     ]
+    result.sort(key=lambda c: c["number"])
+    return result
 
 
 @app.get("/api/schedule/{channel_id}")
@@ -258,6 +267,7 @@ def get_schedule(
     return {
         "channel_id": channel_id,
         "channel_name": channel_name,
+        "channel_number": _channel_number(channel_id),
         "date": date,
         "programs": enriched,
     }
