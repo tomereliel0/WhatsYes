@@ -12,7 +12,7 @@ Usage:
 Environment variables:
     RENDER_URL      – production base URL (e.g. https://whatsyes.onrender.com)
     SYNC_API_KEY    – shared secret matching the Render app's SYNC_API_KEY
-    SYNC_DAYS       – how many days to fetch (default: 2 = today + tomorrow)
+    SYNC_DAYS       – how many days to fetch (default: 9 = today + 8 days ahead)
 """
 
 import os
@@ -37,7 +37,7 @@ if ENV_PATH.exists():
 
 RENDER_URL = os.environ.get("RENDER_URL", "").rstrip("/")
 SYNC_API_KEY = os.environ.get("SYNC_API_KEY", "")
-SYNC_DAYS = int(os.environ.get("SYNC_DAYS", "2"))
+SYNC_DAYS = int(os.environ.get("SYNC_DAYS", "9"))
 
 if not RENDER_URL or not SYNC_API_KEY:
     print("ERROR: Set RENDER_URL and SYNC_API_KEY environment variables (or in .env)")

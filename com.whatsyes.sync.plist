@@ -14,14 +14,9 @@
     <key>WorkingDirectory</key>
     <string>/Users/tomereliel/Documents/Projects/WhatsYes</string>
 
-    <!-- Run once a day at 06:00 -->
-    <key>StartCalendarInterval</key>
-    <dict>
-        <key>Hour</key>
-        <integer>6</integer>
-        <key>Minute</key>
-        <integer>0</integer>
-    </dict>
+    <!-- Run every 2 days (48 hours = 172800 seconds) -->
+    <key>StartInterval</key>
+    <integer>172800</integer>
 
     <!-- Also run at load (immediately on login) -->
     <key>RunAtLoad</key>

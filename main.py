@@ -26,7 +26,7 @@ SYNC_API_KEY = os.environ.get("SYNC_API_KEY", "")
 
 # Synced schedule store: {(channel_id, date_str): {"ts": epoch, "items": [...]}}
 _synced: dict[tuple[str, str], dict] = {}
-SYNC_TTL = 25 * 60 * 60  # Consider synced data stale after 25 hours
+SYNC_TTL = 3 * 24 * 60 * 60  # Consider synced data stale after 3 days (sync runs every 2 days)
 
 # ── Yes API Configuration ────────────────────────────────────────────────────
 
@@ -162,6 +162,28 @@ def _enrich_item(item: dict) -> dict:
     }
 
 
+def _cleanup_past_dates() -> None:
+    """Remove synced entries for dates that have already passed (Israel time)."""
+    today = _israel_now()
+    today_str = f"{today.year}-{today.month}-{today.day}"
+    stale_keys = [
+        key for key in _synced
+        if _compare_date_str(key[1], today_str) < 0
+    ]
+    for key in stale_keys:
+        del _synced[key]
+    if stale_keys:
+        print(f"[sync] Cleaned up {len(stale_keys)} past-date entries")
+
+
+def _compare_date_str(a: str, b: str) -> int:
+    """Compare YYYY-M-D date strings. Returns -1, 0, or 1."""
+    def _parts(s: str) -> tuple[int, ...]:
+        return tuple(int(x) for x in s.split("-"))
+    pa, pb = _parts(a), _parts(b)
+    return (pa > pb) - (pa < pb)
+
+
 # ── Sync Endpoint ────────────────────────────────────────────────────────────
 
 @app.post("/api/_sync")
@@ -183,7 +205,10 @@ async def receive_sync(request: Request, x_sync_key: Optional[str] = Header(None
             _synced[(parts[0], parts[1])] = {"ts": now, "items": items}
             count += 1
 
-    print(f"[sync] Received {count} channel-date entries")
+    # Clean up past dates to save memory
+    _cleanup_past_dates()
+
+    print(f"[sync] Received {count} channel-date entries, store has {len(_synced)} total")
     return {"status": "ok", "entries": count}
 
 
