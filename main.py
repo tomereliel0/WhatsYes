@@ -23,15 +23,46 @@ app = FastAPI(title="WhatsYes - לוח שידורים")
 YES_API_BASE = "https://svc.yes.co.il/api/content/broadcast-schedule/channels"
 
 HEADERS = {
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "he-IL,he;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate, br",
     "Referer": "https://www.yes.co.il/",
     "Origin": "https://www.yes.co.il",
-    "Accept": "application/json",
     "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
+        "Chrome/131.0.0.0 Safari/537.36"
     ),
+    "sec-ch-ua": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"Windows"',
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-site",
+    "Connection": "keep-alive",
 }
+
+# Persistent session — keeps cookies/connection alive across requests.
+_session: requests.Session | None = None
+_session_ts: float = 0
+SESSION_TTL = 30 * 60  # refresh session every 30 min
+
+
+def _get_session() -> requests.Session:
+    """Return a warm requests.Session, refreshing it when stale."""
+    global _session, _session_ts
+    now = time.time()
+    if _session is None or (now - _session_ts) > SESSION_TTL:
+        s = requests.Session()
+        s.headers.update(HEADERS)
+        # Pre-warm: visit main site to pick up cookies / pass WAF challenge
+        try:
+            s.get("https://www.yes.co.il/", timeout=10)
+        except Exception:
+            pass
+        _session = s
+        _session_ts = now
+    return _session
 
 # ── In-Memory Cache ──────────────────────────────────────────────────────────
 # Key: (channel_id, date_str)  →  Value: {"ts": epoch, "data": [...]}
@@ -80,7 +111,8 @@ def _fetch_schedule(channel_id: str, date_str: str) -> list[dict]:
     url = f"{YES_API_BASE}/{channel_id}"
     params = {"date": date_str, "ignorePastItems": "false"}
     try:
-        resp = requests.get(url, headers=HEADERS, params=params, timeout=10)
+        session = _get_session()
+        resp = session.get(url, params=params, timeout=10)
         resp.raise_for_status()
         data = resp.json()
         items = data.get("items", [])
